@@ -1,0 +1,2901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#6366f1">
+    <script>
+      let deferredPrompt;
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        const btn = document.getElementById('btn-install-pwa');
+        if (btn) btn.style.display = 'inline-flex';
+      });
+
+      async function triggerPWAInstall() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        console.log('PWA Install choice:', outcome);
+        deferredPrompt = null;
+        const btn = document.getElementById('btn-install-pwa');
+        if (btn) btn.style.display = 'none';
+      }
+
+      async function shareRoutineProgress() {
+        const todayKey = `${new Date().getFullYear()}-${new Date().getMonth() + 1}-${new Date().getDate()}`;
+        const checkedToday = (appState && appState.checkedHabits && appState.checkedHabits[todayKey]) ? appState.checkedHabits[todayKey] : [];
+        const shareData = {
+          title: 'AURA Routine Progress',
+          text: `🔥 Routine Update: Completed ${checkedToday.length}/6 habits today on my 7th Sem Batch B2 routine!`,
+          url: window.location.href
+        };
+
+        if (navigator.share) {
+          try {
+            await navigator.share(shareData);
+          } catch (err) {
+            console.log('Share canceled');
+          }
+        } else {
+          navigator.clipboard.writeText(`${shareData.text} ${shareData.url}`);
+          alert("📋 Routine progress copied to clipboard!");
+        }
+      }
+
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js').then(reg => {
+            reg.onupdatefound = () => {
+              const installingWorker = reg.installing;
+              if (installingWorker) {
+                installingWorker.onstatechange = () => {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    const toast = document.getElementById('update-toast');
+                    if (toast) toast.style.display = 'flex';
+                  }
+                };
+              }
+            };
+          }).catch(err => console.log('SW registration error:', err));
+        });
+      }
+    </script>
+    <!-- Update Toast Container -->
+    <div id="update-toast" style="display:none; position:fixed; bottom:80px; right:20px; z-index:9999; background:linear-gradient(135deg, #6366f1, #8b5cf6); color:white; padding:12px 20px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.5); align-items:center; gap:12px; font-family:sans-serif; font-size:14px;">
+      <span>🎉 New version available!</span>
+      <button onclick="document.getElementById('update-toast').style.display='none'; window.location.reload()" style="background:white; color:#6366f1; border:none; padding:5px 12px; border-radius:6px; font-weight:700; cursor:pointer;">Refresh</button>
+    </div>
+    <!-- Style Sheet -->
+    <style>
+/* ==========================================================================
+   AURA Design System & Stylesheet
+   ========================================================================== */
+
+:root {
+    /* Color Palette */
+    --bg-primary: #080c14;
+    --bg-secondary: #0f172a;
+    --bg-card: rgba(15, 23, 42, 0.45);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-glow: rgba(99, 102, 241, 0.15);
+    
+    /* Brand Accent Colors */
+    --accent-indigo: #6366f1;
+    --accent-purple: #8b5cf6;
+    --accent-pink: #d946ef;
+    --accent-teal: #14b8a6;
+    --accent-emerald: #10b981;
+    --accent-rose: #f43f5e;
+    --accent-amber: #f59e0b;
+    
+    /* Text Colors */
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    
+    /* Layout Variables */
+    --sidebar-width: 260px;
+    --header-height: 70px;
+    --border-radius-lg: 16px;
+    --border-radius-md: 10px;
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Font stacks */
+    --font-heading: 'Outfit', sans-serif;
+    --font-body: 'Inter', sans-serif;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.6;
+    overflow-x: hidden;
+    background-image: 
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.1) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 45%);
+    background-attachment: fixed;
+}
+
+/* App Container Layout */
+.app-container {
+    display: flex;
+    min-height: 100vh;
+    width: 100vw;
+}
+
+/* Sidebar Navigation */
+.sidebar {
+    width: var(--sidebar-width);
+    background-color: rgba(10, 15, 30, 0.8);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    position: fixed;
+    height: 100vh;
+    z-index: 100;
+    backdrop-filter: blur(20px);
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 40px;
+}
+
+.brand-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple));
+    border-radius: var(--border-radius-md);
+    color: white;
+    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.brand h1 {
+    font-family: var(--font-heading);
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    background: linear-gradient(135deg, #fff 30%, var(--text-secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex-grow: 1;
+}
+
+.nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: none;
+    border: none;
+    padding: 12px 16px;
+    width: 100%;
+    color: var(--text-secondary);
+    font-family: var(--font-heading);
+    font-size: 15px;
+    font-weight: 500;
+    text-align: left;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    transition: var(--transition-smooth);
+}
+
+.nav-btn svg {
+    transition: var(--transition-smooth);
+}
+
+.nav-btn:hover {
+    color: var(--text-primary);
+    background-color: rgba(255, 255, 255, 0.03);
+}
+
+.nav-btn.active {
+    color: white;
+    background: linear-gradient(90deg, rgba(99, 102, 241, 0.15) 0%, rgba(139, 92, 246, 0.05) 100%);
+    border-left: 3px solid var(--accent-indigo);
+    padding-left: 13px; /* Offset border width */
+}
+
+.nav-btn.active svg {
+    color: var(--accent-indigo);
+}
+
+.sidebar-footer {
+    border-top: 1px solid var(--border-color);
+    padding-top: 20px;
+}
+
+.user-badge {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.avatar {
+    width: 38px;
+    height: 38px;
+    background-color: rgba(99, 102, 241, 0.15);
+    border: 1.5px solid var(--accent-indigo);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    color: var(--accent-indigo);
+    font-family: var(--font-heading);
+    font-size: 13px;
+}
+
+.user-info p {
+    margin: 0;
+}
+
+.user-name {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--text-primary);
+}
+
+.user-sub {
+    font-size: 11.5px;
+    color: var(--text-muted);
+}
+
+/* Main Content area */
+.main-content {
+    margin-left: var(--sidebar-width);
+    flex-grow: 1;
+    min-height: 100vh;
+    padding: 30px 40px;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Top Header */
+.top-header {
+    height: var(--header-height);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 25px;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 15px;
+}
+
+.day-badge {
+    background-color: rgba(99, 102, 241, 0.15);
+    color: var(--accent-indigo);
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    margin-right: 12px;
+}
+
+.time-stamp {
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.streak-counter {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background-color: rgba(16, 185, 129, 0.1);
+    color: var(--accent-emerald);
+    font-weight: 600;
+    font-size: 13.5px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.streak-counter svg {
+    color: var(--accent-emerald);
+}
+
+/* General Card Design */
+.card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: var(--transition-smooth);
+    position: relative;
+    overflow: hidden;
+}
+
+.card:hover {
+    border-color: rgba(99, 102, 241, 0.25);
+    box-shadow: 0 12px 40px var(--border-glow);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.card-header h3 {
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--text-primary);
+}
+
+.card-content {
+    padding: 24px;
+}
+
+/* Grid System */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+}
+
+.span-2 {
+    grid-column: span 2;
+}
+
+/* Specific Card Layouts */
+/* Current Activity Card */
+.current-activity-card {
+    position: relative;
+}
+
+.card-bg-gradient {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.05) 50%, transparent 100%);
+    z-index: 0;
+}
+
+.current-activity-card .card-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.badge-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pulse-badge {
+    background-color: rgba(244, 63, 94, 0.15);
+    color: var(--accent-rose);
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.pulse-badge::before {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 6px;
+    background-color: var(--accent-rose);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(0.9); opacity: 0.6; }
+    50% { transform: scale(1.2); opacity: 1; }
+    100% { transform: scale(0.9); opacity: 0.6; }
+}
+
+.routine-category {
+    background-color: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 4px 10px;
+    border-radius: 4px;
+}
+
+.current-task-title {
+    font-family: var(--font-heading);
+    font-size: 26px;
+    font-weight: 700;
+    color: white;
+}
+
+.current-task-desc {
+    color: var(--text-secondary);
+    font-size: 14px;
+}
+
+/* Countdown Timer */
+.timer-display-container {
+    display: flex;
+    align-items: center;
+    gap: 30px;
+    margin-top: 10px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    padding-top: 20px;
+}
+
+.progress-ring-container {
+    position: relative;
+    width: 140px;
+    height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.progress-ring {
+    transform: rotate(-90deg);
+    position: absolute;
+}
+
+.progress-ring__circle {
+    transition: stroke-dashoffset 0.35s;
+    transform-origin: 50% 50%;
+}
+
+.countdown-text {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 700;
+    color: white;
+    z-index: 10;
+}
+
+.timer-details {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.next-up {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-muted);
+    font-weight: 700;
+}
+
+.next-task-name {
+    font-family: var(--font-heading);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.next-task-time {
+    color: var(--text-secondary);
+    font-size: 13px;
+}
+
+/* Habit List */
+.habit-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.habit-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    transition: var(--transition-smooth);
+}
+
+.habit-item:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+}
+
+.habit-item.checked {
+    border-color: rgba(16, 185, 129, 0.2);
+    background-color: rgba(16, 185, 129, 0.03);
+}
+
+.habit-item-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.custom-checkbox {
+    width: 20px;
+    height: 20px;
+    border-radius: 6px;
+    border: 2px solid var(--text-muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-smooth);
+}
+
+.custom-checkbox svg {
+    width: 12px;
+    height: 12px;
+    color: white;
+    opacity: 0;
+    transform: scale(0.6);
+    transition: var(--transition-smooth);
+}
+
+.habit-item.checked .custom-checkbox {
+    background-color: var(--accent-emerald);
+    border-color: var(--accent-emerald);
+}
+
+.habit-item.checked .custom-checkbox svg {
+    opacity: 1;
+    transform: scale(1);
+}
+
+.habit-name {
+    font-weight: 500;
+    color: var(--text-primary);
+    transition: var(--transition-smooth);
+}
+
+.habit-item.checked .habit-name {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.habit-time-badge {
+    font-size: 11px;
+    color: var(--text-secondary);
+    background-color: rgba(255, 255, 255, 0.05);
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+/* Stats Card */
+.stat-progress-item {
+    margin-bottom: 20px;
+}
+
+.stat-progress-item:last-child {
+    margin-bottom: 0;
+}
+
+.stat-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    font-size: 13.5px;
+    font-weight: 500;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 6px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent-indigo), var(--accent-purple));
+    border-radius: 3px;
+    transition: width 0.5s ease-out;
+}
+
+.progress-bar.warning {
+    background: linear-gradient(90deg, var(--accent-amber), var(--accent-purple));
+}
+
+.progress-bar.success {
+    background: linear-gradient(90deg, var(--accent-teal), var(--accent-emerald));
+}
+
+/* Quotes Card */
+.quote-card {
+    background: linear-gradient(135deg, rgba(99,102,241,0.05) 0%, rgba(217,70,239,0.05) 100%);
+    border-color: rgba(99, 102, 241, 0.15);
+}
+
+.quote-icon {
+    font-size: 60px;
+    font-family: serif;
+    line-height: 0;
+    color: rgba(99, 102, 241, 0.15);
+    margin-bottom: 10px;
+}
+
+.quote-text {
+    font-family: var(--font-heading);
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin-bottom: 8px;
+    font-style: italic;
+}
+
+.quote-author {
+    color: var(--accent-purple);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Views display logic */
+.view {
+    display: none;
+    animation: fadeIn 0.4s ease-out forwards;
+}
+
+.view.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Page Headers */
+.section-header-container {
+    margin-bottom: 30px;
+}
+
+.section-header-container h2 {
+    font-family: var(--font-heading);
+    font-size: 28px;
+    font-weight: 700;
+    color: white;
+    margin-bottom: 4px;
+}
+
+.section-subheader {
+    color: var(--text-secondary);
+    font-size: 14.5px;
+}
+
+/* Buttons */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: var(--border-radius-md);
+    font-family: var(--font-heading);
+    font-size: 14.5px;
+    font-weight: 600;
+    padding: 10px 20px;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    border: none;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--accent-indigo), var(--accent-purple));
+    color: white;
+    box-shadow: 0 4px 14px rgba(99, 102, 241, 0.3);
+}
+
+.btn-primary:hover {
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    transform: translateY(-1px);
+}
+
+.btn-secondary {
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.btn-secondary.active {
+    background-color: rgba(99, 102, 241, 0.15);
+    color: var(--accent-indigo);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, var(--accent-rose), #e11d48);
+    color: white;
+}
+
+.btn-danger:hover {
+    box-shadow: 0 4px 14px rgba(244, 63, 94, 0.3);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 12.5px;
+}
+
+.btn-large {
+    padding: 14px 28px;
+    font-size: 16px;
+    border-radius: 30px;
+}
+
+/* Timetable Styles */
+.timetable-controls {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.timetable-grid-wrapper {
+    overflow-x: auto;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    backdrop-filter: blur(12px);
+}
+
+.timetable-grid {
+    display: grid;
+    grid-template-columns: 100px repeat(5, 1fr);
+    min-width: 800px;
+}
+
+.timetable-header-cell {
+    background-color: rgba(255, 255, 255, 0.03);
+    padding: 15px;
+    text-align: center;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--text-primary);
+    border-bottom: 1.5px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+}
+
+.timetable-time-header {
+    grid-column: 1;
+    font-weight: 700;
+    color: var(--accent-purple);
+}
+
+.timetable-cell {
+    padding: 15px 10px;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border-bottom: 1px solid var(--border-color);
+    border-right: 1px solid var(--border-color);
+    font-size: 13px;
+    position: relative;
+    transition: var(--transition-smooth);
+}
+
+.timetable-cell:hover {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+/* College Lectures Accent */
+.timetable-cell.lecture {
+    background-color: rgba(99, 102, 241, 0.05);
+    border-left: 3px solid var(--accent-indigo);
+}
+
+.timetable-cell.lecture .slot-subject {
+    font-weight: 600;
+    color: white;
+}
+
+/* Skill Blocks Accent */
+.timetable-cell.skill-coding {
+    background-color: rgba(139, 92, 246, 0.06);
+    border-left: 3px solid var(--accent-purple);
+}
+.timetable-cell.skill-coding .slot-subject {
+    color: #c084fc;
+    font-weight: 600;
+}
+
+.timetable-cell.skill-english {
+    background-color: rgba(217, 70, 239, 0.06);
+    border-left: 3px solid var(--accent-pink);
+}
+.timetable-cell.skill-english .slot-subject {
+    color: #f472b6;
+    font-weight: 600;
+}
+
+.timetable-cell.skill-zen {
+    background-color: rgba(20, 184, 166, 0.06);
+    border-left: 3px solid var(--accent-teal);
+}
+.timetable-cell.skill-zen .slot-subject {
+    color: #2dd4bf;
+    font-weight: 600;
+}
+
+.timetable-cell.recess {
+    background-color: rgba(255, 255, 255, 0.02);
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.timetable-cell.current-active-slot {
+    background-color: rgba(99, 102, 241, 0.15) !important;
+    outline: 2.5px solid var(--accent-indigo);
+    z-index: 5;
+}
+
+.slot-subject {
+    font-size: 13.5px;
+    margin-bottom: 4px;
+}
+
+.slot-detail {
+    font-size: 11.5px;
+    color: var(--text-secondary);
+}
+
+.slot-time {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 5px;
+}
+
+/* DSA Plan Layout */
+.dsa-container {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 24px;
+}
+
+.dsa-topics-tabs {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.dsa-tab-btn {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    padding: 14px 18px;
+    border-radius: var(--border-radius-md);
+    color: var(--text-secondary);
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: var(--transition-smooth);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.dsa-tab-btn:hover {
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.dsa-tab-btn.active {
+    color: white;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(139, 92, 246, 0.1) 100%);
+    border-color: var(--accent-indigo);
+}
+
+.tab-badge-count {
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    background-color: rgba(255,255,255,0.06);
+    color: var(--text-secondary);
+}
+
+.dsa-tab-btn.active .tab-badge-count {
+    background-color: var(--accent-indigo);
+    color: white;
+}
+
+.progress-pill {
+    font-size: 11.5px;
+    font-weight: 600;
+    padding: 4px 10px;
+    border-radius: 12px;
+    background-color: rgba(99, 102, 241, 0.15);
+    color: var(--accent-indigo);
+}
+
+.dsa-problem-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.dsa-problem-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 18px;
+    background-color: rgba(255,255,255,0.01);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    transition: var(--transition-smooth);
+}
+
+.dsa-problem-item:hover {
+    background-color: rgba(255,255,255,0.03);
+}
+
+.dsa-problem-item.completed {
+    border-color: rgba(16, 185, 129, 0.15);
+    background-color: rgba(16, 185, 129, 0.02);
+}
+
+.problem-meta {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.problem-title {
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.dsa-problem-item.completed .problem-title {
+    text-decoration: line-through;
+    color: var(--text-muted);
+}
+
+.difficulty-badge {
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
+.difficulty-badge.easy {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: var(--accent-emerald);
+}
+
+.difficulty-badge.medium {
+    background-color: rgba(245, 158, 11, 0.15);
+    color: var(--accent-amber);
+}
+
+.difficulty-badge.hard {
+    background-color: rgba(244, 63, 94, 0.15);
+    color: var(--accent-rose);
+}
+
+.problem-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.btn-link {
+    color: var(--accent-indigo);
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: var(--transition-smooth);
+}
+
+.btn-link:hover {
+    text-decoration: underline;
+    color: var(--accent-purple);
+}
+
+/* English Speaking View Styles */
+.english-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+.prompt-box {
+    background-color: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255,255,255,0.1);
+    border-radius: var(--border-radius-md);
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.prompt-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--accent-purple);
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+
+.prompt-content {
+    font-family: var(--font-heading);
+    font-size: 18px;
+    font-weight: 600;
+    color: white;
+}
+
+.speaking-instruction {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    margin-bottom: 24px;
+}
+
+.voice-practice-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    padding: 20px 0 10px 0;
+}
+
+.recording-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    color: var(--accent-rose);
+    font-size: 13.5px;
+}
+
+.recording-indicator .dot {
+    width: 8px;
+    height: 8px;
+    background-color: var(--accent-rose);
+    border-radius: 50%;
+    animation: flash 1s infinite alternate;
+}
+
+@keyframes flash {
+    from { opacity: 0.3; }
+    to { opacity: 1; }
+}
+
+.speech-transcript-box {
+    width: 100%;
+    min-height: 120px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: 15px;
+    font-size: 14px;
+    color: var(--text-primary);
+    overflow-y: auto;
+    font-style: italic;
+}
+
+.speech-transcript-box[placeholder]:empty:before {
+    content: attr(placeholder);
+    color: var(--text-muted);
+}
+
+.shadow-text-box {
+    background-color: rgba(99, 102, 241, 0.03);
+    border-left: 4px solid var(--accent-indigo);
+    padding: 20px;
+    border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0;
+    font-size: 16px;
+    font-style: italic;
+    color: var(--text-primary);
+    line-height: 1.8;
+    margin-bottom: 20px;
+}
+
+.shadowing-instructions {
+    margin-bottom: 15px;
+    font-size: 13.5px;
+    color: var(--text-secondary);
+}
+
+/* Zen Space (Meditation) Styles */
+.meditation-container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.meditation-card {
+    padding: 40px;
+}
+
+.centered {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+}
+
+.ambient-visualizer-container {
+    position: relative;
+    width: 260px;
+    height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.breath-ring {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(20, 184, 166, 0.15) 0%, rgba(99, 102, 241, 0.05) 70%);
+    border: 2px solid var(--accent-teal);
+    box-shadow: 0 0 40px rgba(20, 184, 166, 0.2);
+    transition: width 4s cubic-bezier(0.4, 0, 0.2, 1), height 4s cubic-bezier(0.4, 0, 0.2, 1), background 4s;
+    position: absolute;
+}
+
+.breath-ring.inhale {
+    width: 240px;
+    height: 240px;
+    background: radial-gradient(circle, rgba(20, 184, 166, 0.35) 0%, rgba(99, 102, 241, 0.15) 75%);
+    box-shadow: 0 0 60px rgba(20, 184, 166, 0.4);
+}
+
+.breath-ring.hold {
+    box-shadow: 0 0 70px rgba(139, 92, 246, 0.5);
+    border-color: var(--accent-purple);
+}
+
+.breath-instructions {
+    position: relative;
+    z-index: 10;
+    font-family: var(--font-heading);
+    font-size: 20px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 1px;
+}
+
+.timer-controls-meditation {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.meditation-timer-display {
+    font-family: var(--font-heading);
+    font-size: 48px;
+    font-weight: 700;
+    color: white;
+    letter-spacing: 2px;
+}
+
+.timer-duration-options {
+    display: flex;
+    gap: 8px;
+}
+
+.time-opt {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 6px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-family: var(--font-heading);
+    font-size: 13px;
+    font-weight: 500;
+    transition: var(--transition-smooth);
+}
+
+.time-opt:hover {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.time-opt.active {
+    background-color: rgba(20, 184, 166, 0.15);
+    color: var(--accent-teal);
+    border-color: rgba(20, 184, 166, 0.3);
+}
+
+.timer-actions {
+    display: flex;
+    gap: 15px;
+}
+
+/* Settings View Styles */
+.settings-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+}
+
+.settings-desc {
+    font-size: 13.5px;
+    color: var(--text-secondary);
+    margin-bottom: 20px;
+}
+
+.batch-select-row {
+    display: flex;
+    gap: 10px;
+}
+
+.batch-btn {
+    flex-grow: 1;
+    background-color: rgba(255,255,255,0.02);
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    padding: 12px;
+    border-radius: var(--border-radius-md);
+    cursor: pointer;
+    font-family: var(--font-heading);
+    font-size: 15px;
+    font-weight: 600;
+    transition: var(--transition-smooth);
+}
+
+.batch-btn:hover {
+    background-color: rgba(255,255,255,0.05);
+    color: white;
+}
+
+.batch-btn.active {
+    background-color: rgba(99, 102, 241, 0.15);
+    color: var(--accent-indigo);
+    border-color: var(--accent-indigo);
+}
+
+.subjects-selector-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.subject-edit-item {
+    background-color: rgba(255,255,255,0.01);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.subject-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.subject-header-row label {
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 13.5px;
+    color: var(--text-primary);
+}
+
+.subject-toggle {
+    cursor: pointer;
+}
+
+.subject-input {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: white;
+    transition: var(--transition-smooth);
+    width: 100%;
+}
+
+.subject-input:focus {
+    border-color: var(--accent-indigo);
+    outline: none;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.15);
+}
+
+.danger-text {
+    color: var(--accent-rose);
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* ==========================================================================
+   Mobile Responsiveness & Touch UI Optimization
+   ========================================================================== */
+
+@media (max-width: 768px) {
+    body {
+        padding-bottom: 75px; /* Space for fixed mobile bottom nav */
+    }
+
+    .app-container {
+        flex-direction: column;
+    }
+    
+    /* Fixed Mobile Bottom Bar */
+    .sidebar {
+        width: 100%;
+        height: 65px;
+        position: fixed;
+        bottom: 0;
+        top: auto;
+        left: 0;
+        border-right: none;
+        border-top: 1px solid var(--border-color);
+        padding: 0 10px;
+        background-color: rgba(10, 15, 30, 0.95);
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        z-index: 1000;
+        justify-content: center;
+    }
+    
+    .brand {
+        display: none; /* Hide brand logo in bottom bar to save space */
+    }
+    
+    .sidebar-nav {
+        flex-direction: row;
+        justify-content: space-around;
+        align-items: center;
+        width: 100%;
+        gap: 0;
+        padding: 0;
+    }
+    
+    .nav-btn {
+        flex-direction: column;
+        gap: 3px;
+        padding: 6px 8px;
+        font-size: 10px;
+        text-align: center;
+        justify-content: center;
+        border-radius: 8px;
+        border-left: none !important;
+        min-height: 48px;
+    }
+
+    .nav-btn.active {
+        background: rgba(99, 102, 241, 0.15);
+        color: var(--accent-indigo);
+    }
+    
+    .sidebar-footer {
+        display: none;
+    }
+    
+    /* Main Content Compact Layout */
+    .main-content {
+        margin-left: 0;
+        padding: 16px 12px;
+        min-height: auto;
+    }
+    
+    .top-header {
+        height: auto;
+        padding-bottom: 12px;
+        margin-bottom: 16px;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .day-badge {
+        font-size: 12px;
+        padding: 4px 10px;
+        margin-right: 6px;
+    }
+
+    .time-stamp {
+        font-size: 13.5px;
+    }
+
+    .streak-counter {
+        font-size: 12px;
+        padding: 4px 10px;
+    }
+
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    
+    .span-2 {
+        grid-column: span 1;
+    }
+
+    .current-task-title {
+        font-size: 20px;
+    }
+
+    .timer-display-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 15px;
+        text-align: center;
+    }
+
+    .timer-details {
+        align-items: center;
+    }
+
+    .card-header {
+        padding: 14px 16px;
+    }
+
+    .card-content {
+        padding: 16px;
+    }
+
+    /* Timetable Horizontal Touch Scroll */
+    .timetable-grid-wrapper {
+        -webkit-overflow-scrolling: touch;
+        border-radius: var(--border-radius-md);
+    }
+
+    .timetable-grid {
+        min-width: 650px;
+    }
+
+    .timetable-cell.timetable-time-header {
+        position: sticky;
+        left: 0;
+        background-color: #0b1120;
+        z-index: 10;
+    }
+
+    /* DSA Hub Mobile Layout */
+    .dsa-container {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .dsa-topics-tabs {
+        flex-direction: row;
+        overflow-x: auto;
+        padding-bottom: 8px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .dsa-tab-btn {
+        flex-shrink: 0;
+        padding: 10px 14px;
+        font-size: 12.5px;
+    }
+
+    /* English & Meditation Mobile Layout */
+    .english-grid, .settings-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+
+    .subjects-selector-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .meditation-card {
+        padding: 20px 12px;
+    }
+
+    .ambient-visualizer-container {
+        width: 200px;
+        height: 200px;
+    }
+
+    .breath-ring.inhale {
+        width: 190px;
+        height: 190px;
+    }
+
+    .meditation-timer-display {
+        font-size: 36px;
+    }
+
+    /* Button touch optimization */
+    .btn {
+        min-height: 44px;
+        touch-action: manipulation;
+    }
+}
+
+@media (max-width: 480px) {
+    .section-header-container h2 {
+        font-size: 22px;
+    }
+
+    .section-subheader {
+        font-size: 13px;
+    }
+
+    .nav-btn span {
+        font-size: 9px;
+    }
+
+    .current-task-title {
+        font-size: 18px;
+    }
+}
+
+
+</style>
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="brand">
+                <div class="brand-logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                </div>
+                <h1>AURA</h1>
+            </div>
+            <nav class="sidebar-nav">
+                <button class="nav-btn active" data-tab="dashboard">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg>
+                    <span>Dashboard</span>
+                </button>
+                <button class="nav-btn" data-tab="timetable">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                    <span>Timetable</span>
+                </button>
+                <button class="nav-btn" data-tab="dsa">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+                    <span>Coding & DSA</span>
+                </button>
+                <button class="nav-btn" data-tab="english">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <span>English Hub</span>
+                </button>
+                <button class="nav-btn" data-tab="meditation">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><path d="M12 6v6l4 2"/></svg>
+                    <span>Zen Space</span>
+                </button>
+                <button class="nav-btn" data-tab="settings">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                    <span>Settings</span>
+                </button>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-badge">
+                    <div class="avatar">B2</div>
+                    <div class="user-info">
+                        <p class="user-name">College Routine</p>
+                        <p class="user-sub">Batch B2</p>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Header -->
+            <header class="top-header">
+                <div class="header-search">
+                    <span class="day-badge" id="current-day-badge">Thursday</span>
+                    <span class="time-stamp" id="current-time-stamp">12:30 PM</span>
+                </div>
+                <div class="header-actions">
+                    <button class="btn btn-primary btn-sm" id="btn-install-pwa" style="display:none; margin-right:8px;" onclick="triggerPWAInstall()">📲 Install App</button>
+                    <button class="btn btn-secondary btn-sm" id="btn-share-pwa" style="margin-right:8px;" onclick="shareRoutineProgress()">📤 Share Progress</button>
+                    <div class="streak-counter" title="Daily Routine Streak">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                        <span id="streak-count">5 Days Active</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Dynamic Views -->
+            <div class="view-container">
+                
+                <!-- VIEW 1: DASHBOARD -->
+                <section class="view active" id="view-dashboard">
+                    <div class="dashboard-grid">
+                        <!-- Current activity display -->
+                        <div class="card current-activity-card span-2">
+                            <div class="card-bg-gradient"></div>
+                            <div class="card-content">
+                                <div class="badge-row">
+                                    <span class="pulse-badge">Live Session</span>
+                                    <span class="routine-category" id="current-category">Academics</span>
+                                </div>
+                                <h2 class="current-task-title" id="current-task-name">Radio Frequency Integrated Circuits (RFIC)</h2>
+                                <p class="current-task-desc" id="current-task-time">Time: 11:00 AM - 12:00 PM</p>
+                                
+                                <div class="timer-display-container">
+                                    <div class="progress-ring-container">
+                                        <svg class="progress-ring" width="140" height="140">
+                                            <circle class="progress-ring__circle-bg" stroke="rgba(255,255,255,0.05)" stroke-width="8" fill="transparent" r="60" cx="70" cy="70"/>
+                                            <circle class="progress-ring__circle" id="routine-progress-ring" stroke="url(#timerGrad)" stroke-width="8" fill="transparent" r="60" cx="70" cy="70"/>
+                                            <defs>
+                                                <linearGradient id="timerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                    <stop offset="0%" stop-color="#8b5cf6" />
+                                                    <stop offset="100%" stop-color="#6366f1" />
+                                                </linearGradient>
+                                            </defs>
+                                        </svg>
+                                        <div class="countdown-text" id="countdown-text">45m left</div>
+                                    </div>
+                                    <div class="timer-details">
+                                        <span class="next-up">Next Up:</span>
+                                        <p class="next-task-name" id="next-task-name">Advanced Antenna Engineering (AAE)</p>
+                                        <p class="next-task-time" id="next-task-time">12:00 PM - 1:00 PM</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Habit / Daily Routine completion card -->
+                        <div class="card habit-card">
+                            <div class="card-header">
+                                <h3>Today's Routine Check</h3>
+                                <span class="completion-percentage" id="habit-completion-pct">0% Complete</span>
+                            </div>
+                            <div class="card-content">
+                                <ul class="habit-list" id="daily-habit-checklist">
+                                    <!-- Dynamic checklist -->
+                                </ul>
+                            </div>
+                        </div>
+
+                        <!-- Skill Quick stats -->
+                        <div class="card stats-card">
+                            <div class="card-header">
+                                <h3>Growth Focus</h3>
+                            </div>
+                            <div class="card-content">
+                                <div class="stat-progress-item">
+                                    <div class="stat-meta">
+                                        <span>Coding & DSA</span>
+                                        <span id="dsa-progress-text">12/45 Solved</span>
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar" id="dsa-progress-bar" style="width: 26%;"></div>
+                                    </div>
+                                </div>
+                                <div class="stat-progress-item">
+                                    <div class="stat-meta">
+                                        <span>English Speaking</span>
+                                        <span id="english-streak-text">3 Days Streak</span>
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar warning" id="english-progress-bar" style="width: 60%;"></div>
+                                    </div>
+                                </div>
+                                <div class="stat-progress-item">
+                                    <div class="stat-meta">
+                                        <span>Meditation & Fitness</span>
+                                        <span id="zen-progress-text">Daily Complete</span>
+                                    </div>
+                                    <div class="progress-bar-container">
+                                        <div class="progress-bar success" id="zen-progress-bar" style="width: 100%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Motivation & Tip of the Day -->
+                        <div class="card quote-card span-2">
+                            <div class="card-content">
+                                <div class="quote-icon">“</div>
+                                <p class="quote-text" id="quote-display">"Consistent action creates consistent results. Your small daily habits determine your future success."</p>
+                                <p class="quote-author" id="quote-author">— Focus Principle</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 2: TIMETABLE -->
+                <section class="view" id="view-timetable">
+                    <div class="section-header-container">
+                        <h2>Weekly Timetable (Monday - Friday)</h2>
+                        <p class="section-subheader">Showing college classes integrated with self-improvement blocks for Batch <span class="active-batch-text">B2</span></p>
+                    </div>
+
+                    <div class="timetable-controls">
+                        <button class="btn btn-secondary active" id="btn-show-college">College Only</button>
+                        <button class="btn btn-secondary" id="btn-show-full">Full Day Routine</button>
+                    </div>
+
+                    <div class="timetable-grid-wrapper">
+                        <div class="timetable-grid" id="timetable-grid-element">
+                            <!-- Dynamic timetable rendered here -->
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 3: CODING & DSA -->
+                <section class="view" id="view-dsa">
+                    <div class="section-header-container">
+                        <h2>Coding & Data Structures (DSA) Plan</h2>
+                        <p class="section-subheader">Progressive practice list covering core engineering interview topics</p>
+                    </div>
+
+                    <div class="dsa-container">
+                        <!-- Sidebar tabs for DSA Topics -->
+                        <div class="dsa-topics-tabs" id="dsa-topics-tabs-container">
+                            <!-- Topic Tabs generated here -->
+                        </div>
+
+                        <!-- DSA Problems Checklist -->
+                        <div class="card dsa-checklist-card">
+                            <div class="card-header">
+                                <h3 id="active-dsa-topic-title">Arrays & Hashing</h3>
+                                <div class="progress-pill" id="dsa-topic-progress-pill">0% Done</div>
+                            </div>
+                            <div class="card-content">
+                                <ul class="dsa-problem-list" id="dsa-problem-list-element">
+                                    <!-- Problems loaded dynamically -->
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 4: ENGLISH HUB -->
+                <section class="view" id="view-english">
+                    <div class="section-header-container">
+                        <h2>English Speaking & Communication Hub</h2>
+                        <p class="section-subheader">Sharpen your fluency, speech pacing, and vocabulary daily</p>
+                    </div>
+
+                    <div class="english-grid">
+                        <!-- Speaking Practice Card -->
+                        <div class="card speaking-card">
+                            <div class="card-header">
+                                <h3>Daily Speaking Topic Challenge</h3>
+                                <button class="btn btn-primary btn-sm" id="btn-new-topic">New Topic</button>
+                            </div>
+                            <div class="card-content">
+                                <div class="prompt-box">
+                                    <p class="prompt-title">Your topic for today:</p>
+                                    <p class="prompt-content" id="speaking-prompt-display">"Explain how recursion works to a 10-year-old child."</p>
+                                </div>
+                                <div class="speaking-instruction">
+                                    <p>💡 <strong>Goal:</strong> Speak continuously for 2 minutes. Try to use simple analogies and project your voice clearly.</p>
+                                </div>
+                                
+                                <div class="voice-practice-box">
+                                    <button class="btn btn-danger btn-large" id="btn-record-speech">
+                                        <svg class="mic-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                                        <span id="record-btn-text">Start Speaking Practice</span>
+                                    </button>
+                                    <div class="recording-indicator" id="rec-indicator" style="display: none;">
+                                        <span class="dot"></span> Listening... speak clearly.
+                                    </div>
+                                    <div class="speech-transcript-box" id="speech-transcript" placeholder="Your live speech transcript will appear here. Try speaking into your microphone..."></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reading Shadowing Practice -->
+                        <div class="card shadowing-card">
+                            <div class="card-header">
+                                <h3>English Shadow Reading</h3>
+                            </div>
+                            <div class="card-content">
+                                <p class="shadowing-instructions">Shadow reading involves reading text aloud concurrently with a native model or at a controlled, natural pace. Read the following text aloud with focus on intonation and rhythm:</p>
+                                <div class="shadow-text-box">
+                                    <p id="shadow-text">"The pursuit of excellence is a journey, not a destination. By committing to small, incremental improvements every single day, we build a compound effect that eventually yields extraordinary breakthroughs in our skills, our intellect, and our outlook on life."</p>
+                                </div>
+                                <button class="btn btn-secondary btn-sm" id="btn-new-shadow-text">Get Another Text</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 5: ZEN SPACE (MEDITATION) -->
+                <section class="view" id="view-meditation">
+                    <div class="section-header-container">
+                        <h2>Zen Space</h2>
+                        <p class="section-subheader">Ground yourself, reduce mental fatigue, and sharpen your focus</p>
+                    </div>
+
+                    <div class="meditation-container">
+                        <!-- Ambient meditation circle -->
+                        <div class="card meditation-card">
+                            <div class="card-content centered">
+                                <div class="ambient-visualizer-container">
+                                    <!-- Breath guide circle -->
+                                    <div class="breath-ring" id="breath-circle"></div>
+                                    <div class="breath-instructions" id="breath-instructions">Relax</div>
+                                </div>
+
+                                <div class="timer-controls-meditation">
+                                    <div class="meditation-timer-display" id="meditation-timer-display">10:00</div>
+                                    
+                                    <div class="timer-duration-options">
+                                        <button class="time-opt active" data-time="300">5 Min</button>
+                                        <button class="time-opt" data-time="600">10 Min</button>
+                                        <button class="time-opt" data-time="900">15 Min</button>
+                                    </div>
+
+                                    <div class="timer-actions">
+                                        <button class="btn btn-primary" id="btn-meditation-play">Start Session</button>
+                                        <button class="btn btn-secondary" id="btn-meditation-ambient" data-playing="false">Sound: Off</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- VIEW 6: SETTINGS -->
+                <section class="view" id="view-settings">
+                    <div class="section-header-container">
+                        <h2>Settings & Customization</h2>
+                        <p class="section-subheader">Tailor the app according to your academic focus and daily habits</p>
+                    </div>
+
+                    <div class="settings-grid">
+                        <!-- Batch Selection -->
+                        <div class="card settings-card-item">
+                            <div class="card-header">
+                                <h3>Batch Selection</h3>
+                            </div>
+                            <div class="card-content">
+                                <p class="settings-desc">Choose your college batch to update your laboratory timetable (SIRE-II and PPD-II labs).</p>
+                                <div class="batch-select-row">
+                                    <button class="batch-btn" data-batch="A1">A1</button>
+                                    <button class="batch-btn" data-batch="A2">A2</button>
+                                    <button class="batch-btn" data-batch="B1">B1</button>
+                                    <button class="batch-btn active" data-batch="B2">B2</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Focus Subjects -->
+                        <div class="card settings-card-item span-2">
+                            <div class="card-header">
+                                <h3>Your 4 Focus Core Subjects</h3>
+                            </div>
+                            <div class="card-content">
+                                <p class="settings-desc">Select which 4 core subjects you want to display in your daily revision plan. You can rename these labels to match your specific curriculum.</p>
+                                <div class="subjects-selector-grid" id="subjects-selector-container">
+                                    <!-- Dynamic subject inputs with checkbox toggles -->
+                                </div>
+                                <button class="btn btn-primary" id="btn-save-subjects" style="margin-top: 15px;">Save Subject Settings</button>
+                            </div>
+                        </div>
+
+                        <!-- Offline Backup & Restore -->
+                        <div class="card settings-card-item">
+                            <div class="card-header">
+                                <h3>Offline Backup & Restore</h3>
+                            </div>
+                            <div class="card-content">
+                                <p class="settings-desc">Export your habit progress, DSA history, and settings as a JSON file or import a backup.</p>
+                                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                                    <button class="btn btn-secondary btn-sm" id="btn-export-backup">📥 Export Data</button>
+                                    <button class="btn btn-secondary btn-sm" id="btn-import-backup">📤 Import Data</button>
+                                    <input type="file" id="file-import-input" accept=".json" style="display:none;">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Reset Data -->
+                        <div class="card settings-card-item">
+                            <div class="card-header">
+                                <h3 class="danger-text">Data Reset</h3>
+                            </div>
+                            <div class="card-content">
+                                <p class="settings-desc">Reset all checkboxes, stats, streaks, and custom configuration back to default.</p>
+                                <button class="btn btn-danger btn-sm" id="btn-reset-data">Reset App Data</button>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- JavaScript logic -->
+    <script>
+/* ==========================================================================
+   AURA Personal Routine & Academic Tracker Logic
+   ========================================================================== */
+
+// --- Default Data & Schemas ---
+const TIMETABLE_DATA = {
+    MON: [
+        { start: "06:30", end: "07:15", name: "Morning Exercise & Stretch", category: "Fitness", type: "zen" },
+        { start: "07:15", end: "07:45", name: "Mindful Meditation", category: "Wellness", type: "zen" },
+        { start: "09:00", end: "10:00", name: "B-SPP-SKS", category: "Academics", type: "lecture" },
+        { start: "10:00", end: "12:00", name: "AI / ML Online Course Block", category: "Online Course", type: "skill-coding" },
+        { start: "12:00", end: "13:00", name: "AAE-DM", category: "Academics", type: "lecture" },
+        { start: "13:00", end: "14:00", name: "RECESS & Lunch Break", category: "Rest", type: "recess" },
+        { start: "14:00", end: "15:00", name: "Open Elective 1 (Online)", category: "Online Course", type: "skill-english" },
+        { start: "15:00", end: "17:00", name: "PPD & Seminar Work", category: "Project", type: "recess" },
+        { start: "17:30", end: "18:30", name: "English Speaking & Shadowing Practice", category: "Skill", type: "english" },
+        { start: "19:00", end: "21:00", name: "Coding & DSA Practice Block", category: "Skill", type: "coding" },
+        { start: "21:30", end: "23:30", name: "Core Revision (AAE & SPP)", category: "Academics", type: "lecture" }
+    ],
+    TUE: [
+        { start: "06:30", end: "07:15", name: "Morning Exercise & Stretch", category: "Fitness", type: "zen" },
+        { start: "07:15", end: "07:45", name: "Mindful Meditation", category: "Wellness", type: "zen" },
+        { start: "10:00", end: "11:00", name: "B-SPP-SKS", category: "Academics", type: "lecture" },
+        { start: "11:00", end: "13:00", name: "Open Elective 2 (Online)", category: "Online Course", type: "skill-english" },
+        { start: "13:00", end: "14:00", name: "RECESS & Lunch Break", category: "Rest", type: "recess" },
+        { start: "14:00", end: "15:00", name: "AAE-DM", category: "Academics", type: "lecture" },
+        { start: "15:00", end: "17:00", name: "AI / ML Hands-on Project", category: "Online Course", type: "skill-coding" },
+        { start: "17:30", end: "18:30", name: "English Speaking & Speech Record", category: "Skill", type: "english" },
+        { start: "19:00", end: "21:00", name: "Coding & DSA Practice Block", category: "Skill", type: "coding" },
+        { start: "21:30", end: "23:30", name: "Core Revision (Open Electives)", category: "Academics", type: "lecture" }
+    ],
+    WED: [
+        { start: "06:30", end: "07:15", name: "Morning Exercise & Stretch", category: "Fitness", type: "zen" },
+        { start: "07:15", end: "07:45", name: "Mindful Meditation", category: "Wellness", type: "zen" },
+        { start: "09:00", end: "11:00", name: "Open Elective 1 (Online)", category: "Online Course", type: "skill-english" },
+        { start: "11:00", end: "13:00", name: "AI / ML Online Course Block", category: "Online Course", type: "skill-coding" },
+        { start: "13:00", end: "14:00", name: "RECESS & Lunch Break", category: "Rest", type: "recess" },
+        { start: "14:00", end: "15:00", name: "Open Elective 2 (Online)", category: "Online Course", type: "skill-english" },
+        { start: "15:00", end: "17:00", name: "Seminar & Lab Preparation", category: "Project", type: "recess" },
+        { start: "17:30", end: "18:30", name: "English Speaking Practice", category: "Skill", type: "english" },
+        { start: "19:00", end: "21:00", name: "Coding & DSA Practice Block", category: "Skill", type: "coding" },
+        { start: "21:30", end: "23:30", name: "Core Revision (AAE & AI/ML)", category: "Academics", type: "lecture" }
+    ],
+    THU: [
+        { start: "06:30", end: "07:15", name: "Morning Exercise & Stretch", category: "Fitness", type: "zen" },
+        { start: "07:15", end: "07:45", name: "Mindful Meditation", category: "Wellness", type: "zen" },
+        { start: "10:00", end: "12:00", name: "Open Elective 2 (Online)", category: "Online Course", type: "skill-english" },
+        { start: "12:00", end: "13:00", name: "AAE-DM", category: "Academics", type: "lecture" },
+        { start: "13:00", end: "14:00", name: "RECESS & Lunch Break", category: "Rest", type: "recess" },
+        { start: "14:00", end: "15:00", name: "B-SPP-SKS", category: "Academics", type: "lecture" },
+        { 
+            start: "15:00", end: "17:00", 
+            batches: {
+                A1: "Self Study",
+                A2: "Self Study",
+                B1: "Self Study",
+                B2: "B2-PPD-II-ALL"
+            },
+            category: "Lab / Practical", type: "lecture" 
+        },
+        { start: "17:30", end: "18:30", name: "English Fluency & Vocabulary", category: "Skill", type: "english" },
+        { start: "19:00", end: "21:00", name: "Coding & DSA Practice Block", category: "Skill", type: "coding" },
+        { start: "21:30", end: "23:30", name: "Core Revision (SPP & PPD)", category: "Academics", type: "lecture" }
+    ],
+    FRI: [
+        { start: "06:30", end: "07:15", name: "Morning Exercise & Stretch", category: "Fitness", type: "zen" },
+        { start: "07:15", end: "07:45", name: "Mindful Meditation", category: "Wellness", type: "zen" },
+        { start: "09:00", end: "12:00", name: "AI / ML & Open Elective Review", category: "Online Course", type: "skill-coding" },
+        { start: "13:00", end: "14:00", name: "RECESS & Lunch Break", category: "Rest", type: "recess" },
+        { start: "14:00", end: "15:00", name: "Seminar Preparation", category: "Project", type: "recess" },
+        { 
+            start: "15:00", end: "17:00", 
+            batches: {
+                A1: "Self Study",
+                A2: "Self Study",
+                B1: "Self Study",
+                B2: "B2-SIRE-II-SM, SS"
+            },
+            category: "Lab / Practical", type: "lecture" 
+        },
+        { start: "17:30", end: "18:30", name: "Weekly English Speech Review", category: "Skill", type: "english" },
+        { start: "19:00", end: "21:00", name: "Coding & DSA Weekly Challenge", category: "Skill", type: "coding" },
+        { start: "21:30", end: "23:30", name: "Weekly Seminar & Subject Wrap-Up", category: "Academics", type: "lecture" }
+    ],
+    SAT: [
+        { start: "06:30", end: "07:15", name: "Morning Exercise & Stretch", category: "Fitness", type: "zen" },
+        { start: "07:15", end: "07:45", name: "Mindful Meditation", category: "Wellness", type: "zen" },
+        { start: "09:00", end: "11:30", name: "AI / ML Project & Electives Deep Dive", category: "Online Course", type: "skill-coding" },
+        { start: "11:30", end: "13:00", name: "Weekly DSA Contest Simulation", category: "Skill", type: "coding" },
+        { start: "13:00", end: "14:00", name: "RECESS & Lunch Break", category: "Rest", type: "recess" },
+        { start: "14:00", end: "16:00", name: "PPD Project & Seminar Deck Prep", category: "Project", type: "recess" },
+        { start: "16:30", end: "17:30", name: "English Public Speaking Challenge", category: "Skill", type: "english" },
+        { start: "18:00", end: "20:00", name: "Personal Time / Leisure & Outing", category: "Rest", type: "recess" },
+        { start: "20:30", end: "22:30", name: "Weekly Knowledge Review", category: "Academics", type: "lecture" }
+    ],
+    SUN: [
+        { start: "07:00", end: "07:45", name: "Outdoor Yoga / Walk", category: "Fitness", type: "zen" },
+        { start: "07:45", end: "08:15", name: "Guided Meditation", category: "Wellness", type: "zen" },
+        { start: "09:30", end: "12:00", name: "Coding & DSA Weekend Marathon", category: "Skill", type: "coding" },
+        { start: "12:00", end: "13:30", name: "Open Electives & AI/ML Quiz Catch-up", category: "Online Course", type: "skill-coding" },
+        { start: "13:30", end: "14:30", name: "Lunch Break & Relax", category: "Rest", type: "recess" },
+        { start: "14:30", end: "17:30", name: "Hobbies, Family & Recreation Time", category: "Rest", type: "recess" },
+        { start: "17:30", end: "18:30", name: "English Reading / Podcasts / TED Talk", category: "Skill", type: "english" },
+        { start: "19:00", end: "20:30", name: "Weekly Review & Setting Goals for Mon", category: "Planning", type: "zen" },
+        { start: "21:00", end: "22:30", name: "Light Reading & Wind-down", category: "Rest", type: "recess" }
+    ]
+};
+
+const DSA_TOPICS = [
+    {
+        id: "arrays",
+        title: "Arrays & Hashing",
+        problems: [
+            { id: "p1", title: "Contains Duplicate", difficulty: "easy" },
+            { id: "p2", title: "Valid Anagram", difficulty: "easy" },
+            { id: "p3", title: "Two Sum", difficulty: "easy" },
+            { id: "p4", title: "Group Anagrams", difficulty: "medium" },
+            { id: "p5", title: "Top K Frequent Elements", difficulty: "medium" },
+            { id: "p6", title: "Product of Array Except Self", difficulty: "medium" }
+        ]
+    },
+    {
+        id: "pointers",
+        title: "Two Pointers",
+        problems: [
+            { id: "p7", title: "Valid Palindrome", difficulty: "easy" },
+            { id: "p8", title: "Two Sum II Input Array Is Sorted", difficulty: "medium" },
+            { id: "p9", title: "3Sum", difficulty: "medium" },
+            { id: "p10", title: "Container With Most Water", difficulty: "medium" }
+        ]
+    },
+    {
+        id: "stack",
+        title: "Stack & Queues",
+        problems: [
+            { id: "p11", title: "Valid Parentheses", difficulty: "easy" },
+            { id: "p12", title: "Min Stack", difficulty: "medium" },
+            { id: "p13", title: "Evaluate Reverse Polish Notation", difficulty: "medium" },
+            { id: "p14", title: "Daily Temperatures", difficulty: "medium" }
+        ]
+    },
+    {
+        id: "trees",
+        title: "Trees & Binary Search",
+        problems: [
+            { id: "p15", title: "Invert Binary Tree", difficulty: "easy" },
+            { id: "p16", title: "Maximum Depth of Binary Tree", difficulty: "easy" },
+            { id: "p17", title: "Binary Tree Level Order Traversal", difficulty: "medium" },
+            { id: "p18", title: "Validate Binary Search Tree", difficulty: "medium" }
+        ]
+    },
+    {
+        id: "dp",
+        title: "Dynamic Programming",
+        problems: [
+            { id: "p19", title: "Climbing Stairs", difficulty: "easy" },
+            { id: "p20", title: "House Robber", difficulty: "medium" },
+            { id: "p21", title: "Coin Change", difficulty: "medium" },
+            { id: "p22", title: "Longest Increasing Subsequence", difficulty: "medium" }
+        ]
+    }
+];
+
+const ENGLISH_PROMPTS = [
+    "Explain how a microchip or transistor works in simple terms.",
+    "What is your vision for your engineering career in 5 years?",
+    "Describe your daily study routine and how you maintain focus.",
+    "If you could create any tech startup tomorrow, what problem would it solve?",
+    "Explain the concept of Artificial Intelligence to someone non-technical.",
+    "Talk about a mistake you made in a past project and what it taught you.",
+    "Why is meditation and consistency important for high performance?"
+];
+
+const SHADOW_TEXTS = [
+    "The pursuit of excellence is a journey, not a destination. By committing to small, incremental improvements every single day, we build a compound effect that eventually yields extraordinary breakthroughs in our skills, our intellect, and our outlook on life.",
+    "Mastery in software engineering is not merely about writing code; it is about structuring your thoughts clearly, communicating complex ideas with precision, and solving meaningful real-world problems with elegance and efficiency.",
+    "Quiet confidence comes from preparation. When you dedicate yourself to daily practice in coding, physical wellness, and communication, challenges transform into natural opportunities for growth."
+];
+
+const QUOTES = [
+    { text: "Consistency is what transforms average into excellence.", author: "— Habit Principle" },
+    { text: "Small daily improvements over time lead to stunning results.", author: "— Robin Sharma" },
+    { text: "First make your habits, then your habits make you.", author: "— John Dryden" },
+    { text: "The secret of your future is hidden in your daily routine.", author: "— Mike Murdock" }
+];
+
+// --- App State ---
+let appState = {
+    batch: "B2",
+    focusSubjects: [
+        "Advanced Antenna (AAE)", 
+        "System Prototyping Program (SPP)", 
+        "Open Electives (Online)", 
+        "AI/ML & PPD/Seminar"
+    ],
+    checkedHabits: {}, // { '2026-07-23': ['habit-1', 'habit-2'] }
+    completedDSA: {}, // { 'p1': true }
+    activeDSATopic: "arrays",
+    meditationTime: 600,
+    meditationRemaining: 600,
+    isMeditationRunning: false,
+    ambientSoundActive: false
+};
+
+// --- Initialization ---
+document.addEventListener("DOMContentLoaded", () => {
+    loadStateFromStorage();
+    initNavigation();
+    initDashboard();
+    initTimetable();
+    initDSAHub();
+    initEnglishHub();
+    initZenSpace();
+    initSettings();
+
+    // Start live clock & task updater interval
+    setInterval(updateLiveClockAndTask, 1000);
+    updateLiveClockAndTask();
+});
+
+// --- Local Storage Management ---
+function loadStateFromStorage() {
+    const saved = localStorage.getItem("aura_routine_state");
+    if (saved) {
+        try {
+            const parsed = JSON.parse(saved);
+            appState = { ...appState, ...parsed };
+        } catch (e) {
+            console.error("Could not parse saved state", e);
+        }
+    }
+}
+
+function saveStateToStorage() {
+    localStorage.setItem("aura_routine_state", JSON.stringify(appState));
+}
+
+// --- Navigation ---
+function initNavigation() {
+    const navButtons = document.querySelectorAll(".nav-btn");
+    const views = document.querySelectorAll(".view");
+
+    navButtons.forEach(btn => {
+        btn.addEventListener("click", () => {
+            const targetTab = btn.getAttribute("data-tab");
+
+            navButtons.forEach(b => b.classList.remove("active"));
+            views.forEach(v => v.classList.remove("active"));
+
+            btn.classList.add("active");
+            const targetView = document.getElementById(`view-${targetTab}`);
+            if (targetView) targetView.classList.add("active");
+        });
+    });
+}
+
+// --- Dashboard Component ---
+function initDashboard() {
+    renderHabitChecklist();
+    renderGrowthStats();
+    setRandomQuote();
+}
+
+function getTodayKey() {
+    const now = new Date();
+    return `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+}
+
+function renderHabitChecklist() {
+    const checklistContainer = document.getElementById("daily-habit-checklist");
+    if (!checklistContainer) return;
+
+    const dayNum = new Date().getDay(); // 0: Sun, 1: Mon, 2: Tue, 3: Wed, 4: Thu, 5: Fri, 6: Sat
+    let subA = appState.focusSubjects[0] || 'Advanced Antenna (AAE)';
+    let subB = appState.focusSubjects[1] || 'System Prototyping Program (SPP)';
+
+    if (dayNum === 2 || dayNum === 4) { // Tue / Thu
+        subA = appState.focusSubjects[2] || 'Open Elective 1';
+        subB = appState.focusSubjects[3] || 'Open Elective 2';
+    } else if (dayNum === 5) { // Fri
+        subA = appState.focusSubjects[0] || 'Advanced Antenna (AAE)';
+        subB = appState.focusSubjects[2] || 'Open Elective 1';
+    }
+
+    const habits = [
+        { id: "h_ex", name: "Morning Exercise & Stretching", time: "06:30 AM" },
+        { id: "h_med", name: "15-Min Mindfulness Meditation", time: "07:15 AM" },
+        { id: "h_eng", name: "English Speaking & Shadowing", time: "05:30 PM" },
+        { id: "h_dsa", name: "2 Hours DSA & Problem Solving", time: "07:00 PM" },
+        { id: "h_subj1", name: `Revision: ${subA}`, time: "09:30 PM" },
+        { id: "h_subj2", name: `Revision: ${subB}`, time: "10:30 PM" }
+    ];
+
+    const todayKey = getTodayKey();
+    const checkedToday = appState.checkedHabits[todayKey] || [];
+
+    checklistContainer.innerHTML = habits.map(habit => {
+        const isChecked = checkedToday.includes(habit.id);
+        return `
+            <li class="habit-item ${isChecked ? 'checked' : ''}" data-id="${habit.id}">
+                <div class="habit-item-left">
+                    <div class="custom-checkbox" onclick="toggleHabit('${habit.id}')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <span class="habit-name">${habit.name}</span>
+                </div>
+                <span class="habit-time-badge">${habit.time}</span>
+            </li>
+        `;
+    }).join("");
+
+    // Update Percentage
+    const pct = Math.round((checkedToday.length / habits.length) * 100);
+    const pctElement = document.getElementById("habit-completion-pct");
+    if (pctElement) pctElement.textContent = `${pct}% Complete`;
+}
+
+window.toggleHabit = function(habitId) {
+    const todayKey = getTodayKey();
+    if (!appState.checkedHabits[todayKey]) {
+        appState.checkedHabits[todayKey] = [];
+    }
+
+    const index = appState.checkedHabits[todayKey].indexOf(habitId);
+    if (index > -1) {
+        appState.checkedHabits[todayKey].splice(index, 1);
+    } else {
+        appState.checkedHabits[todayKey].push(habitId);
+    }
+
+    saveStateToStorage();
+    renderHabitChecklist();
+    renderGrowthStats();
+};
+
+function renderGrowthStats() {
+    // DSA Progress
+    let totalProblems = 0;
+    let completedProblems = 0;
+    DSA_TOPICS.forEach(topic => {
+        topic.problems.forEach(p => {
+            totalProblems++;
+            if (appState.completedDSA[p.id]) completedProblems++;
+        });
+    });
+
+    const dsaPct = totalProblems > 0 ? Math.round((completedProblems / totalProblems) * 100) : 0;
+    const dsaBar = document.getElementById("dsa-progress-bar");
+    const dsaText = document.getElementById("dsa-progress-text");
+    if (dsaBar) dsaBar.style.width = `${dsaPct}%`;
+    if (dsaText) dsaText.textContent = `${completedProblems}/${totalProblems} Solved`;
+}
+
+function setRandomQuote() {
+    const quoteObj = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+    const qText = document.getElementById("quote-display");
+    const qAuthor = document.getElementById("quote-author");
+    if (qText) qText.textContent = `"${quoteObj.text}"`;
+    if (qAuthor) qAuthor.textContent = quoteObj.author;
+}
+
+// --- Live Clock & Task Updater ---
+function updateLiveClockAndTask() {
+    const now = new Date();
+    const days = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+    const fullDays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    
+    const dayCode = days[now.getDay()];
+    const dayFull = fullDays[now.getDay()];
+
+    const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    
+    const dayBadge = document.getElementById("current-day-badge");
+    const timeStamp = document.getElementById("current-time-stamp");
+
+    if (dayBadge) dayBadge.textContent = dayFull;
+    if (timeStamp) timeStamp.textContent = timeStr;
+
+    // Calculate current session
+    const currentMins = now.getHours() * 60 + now.getMinutes();
+    const daySchedule = TIMETABLE_DATA[dayCode] || TIMETABLE_DATA["MON"]; // Fallback to MON on weekends
+
+    let currentTask = null;
+    let nextTask = null;
+
+    for (let i = 0; i < daySchedule.length; i++) {
+        const item = daySchedule[i];
+        const [sh, sm] = item.start.split(":").map(Number);
+        const [eh, em] = item.end.split(":").map(Number);
+        const startMins = sh * 60 + sm;
+        const endMins = eh * 60 + em;
+
+        if (currentMins >= startMins && currentMins < endMins) {
+            currentTask = item;
+            nextTask = daySchedule[i + 1] || { name: "Evening Relaxation / Sleep", start: "23:30", end: "06:30" };
+            break;
+        } else if (currentMins < startMins && !nextTask) {
+            nextTask = item;
+        }
+    }
+
+    const taskTitle = document.getElementById("current-task-name");
+    const taskCategory = document.getElementById("current-category");
+    const taskTime = document.getElementById("current-task-time");
+    const countdownText = document.getElementById("countdown-text");
+    const nextTitle = document.getElementById("next-task-name");
+    const nextTime = document.getElementById("next-task-time");
+
+    if (currentTask) {
+        let taskName = currentTask.name;
+        if (currentTask.batches) {
+            taskName = currentTask.batches[appState.batch] || currentTask.batches["B2"];
+        }
+
+        if (taskTitle) taskTitle.textContent = taskName;
+        if (taskCategory) taskCategory.textContent = currentTask.category || "Scheduled";
+        if (taskTime) taskTime.textContent = `Time: ${formatTime12(currentTask.start)} - ${formatTime12(currentTask.end)}`;
+
+        // Calculate time remaining
+        const [eh, em] = currentTask.end.split(":").map(Number);
+        const endMins = eh * 60 + em;
+        const remaining = endMins - currentMins;
+        if (countdownText) countdownText.textContent = `${remaining}m left`;
+
+        // Update progress ring
+        const [sh, sm] = currentTask.start.split(":").map(Number);
+        const totalDuration = endMins - (sh * 60 + sm);
+        const elapsed = currentMins - (sh * 60 + sm);
+        const fraction = Math.min(1, Math.max(0, elapsed / totalDuration));
+        
+        const circle = document.getElementById("routine-progress-ring");
+        if (circle) {
+            const circumference = 2 * Math.PI * 60; // r=60
+            const offset = circumference - (fraction * circumference);
+            circle.style.strokeDasharray = `${circumference} ${circumference}`;
+            circle.style.strokeDashoffset = offset;
+        }
+
+    } else {
+        if (taskTitle) taskTitle.textContent = "Personal Free Time / Rest";
+        if (taskCategory) taskCategory.textContent = "Unscheduled";
+        if (taskTime) taskTime.textContent = "No strict lecture active";
+        if (countdownText) countdownText.textContent = "--";
+    }
+
+    if (nextTask) {
+        let nextName = nextTask.name;
+        if (nextTask.batches) {
+            nextName = nextTask.batches[appState.batch] || nextTask.batches["B2"];
+        }
+        if (nextTitle) nextTitle.textContent = nextName;
+        if (nextTime) nextTime.textContent = `${formatTime12(nextTask.start)} - ${formatTime12(nextTask.end)}`;
+    }
+}
+
+function formatTime12(time24) {
+    const [h, m] = time24.split(":").map(Number);
+    const period = h >= 12 ? "PM" : "AM";
+    const h12 = h % 12 || 12;
+    return `${h12}:${m < 10 ? '0' + m : m} ${period}`;
+}
+
+// --- Timetable Component ---
+function initTimetable() {
+    const gridContainer = document.getElementById("timetable-grid-element");
+    const btnCollege = document.getElementById("btn-show-college");
+    const btnFull = document.getElementById("btn-show-full");
+
+    let mode = "college"; // 'college' or 'full'
+
+    function renderGrid() {
+        if (!gridContainer) return;
+
+        const timeSlots = mode === "college" ? [
+            { label: "1ST (09:00)", start: "09:00", end: "10:00" },
+            { label: "2ND (10:00)", start: "10:00", end: "11:00" },
+            { label: "3RD (11:00)", start: "11:00", end: "12:00" },
+            { label: "4TH (12:00)", start: "12:00", end: "13:00" },
+            { label: "RECESS", start: "13:00", end: "14:00" },
+            { label: "5TH (14:00)", start: "14:00", end: "15:00" },
+            { label: "6-7TH (15:00)", start: "15:00", end: "17:00" }
+        ] : [
+            { label: "FITNESS (06:30)", start: "06:30", end: "07:15" },
+            { label: "ZEN (07:15)", start: "07:15", end: "07:45" },
+            { label: "1ST (09:00)", start: "09:00", end: "10:00" },
+            { label: "2ND (10:00)", start: "10:00", end: "11:00" },
+            { label: "3RD (11:00)", start: "11:00", end: "12:00" },
+            { label: "4TH (12:00)", start: "12:00", end: "13:00" },
+            { label: "RECESS", start: "13:00", end: "14:00" },
+            { label: "5TH (14:00)", start: "14:00", end: "15:00" },
+            { label: "6-7TH (15:00)", start: "15:00", end: "17:00" },
+            { label: "ENGLISH (17:30)", start: "17:30", end: "18:30" },
+            { label: "DSA (19:00)", start: "19:00", end: "21:00" },
+            { label: "REVISION (21:30)", start: "21:30", end: "23:30" }
+        ];
+
+        const days = mode === "college" 
+            ? ["MON", "TUE", "WED", "THU", "FRI"] 
+            : ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+
+        let html = `<div class="timetable-header-cell timetable-time-header">TIME</div>`;
+        days.forEach(d => {
+            html += `<div class="timetable-header-cell">${d}</div>`;
+        });
+
+        timeSlots.forEach(slot => {
+            html += `<div class="timetable-cell timetable-time-header" style="font-weight:600; font-size:11px;">${slot.label}</div>`;
+
+            days.forEach(day => {
+                const daySchedule = TIMETABLE_DATA[day] || [];
+                const match = daySchedule.find(s => s.start === slot.start);
+
+                if (match) {
+                    let name = match.name;
+                    if (match.batches) {
+                        name = match.batches[appState.batch] || match.batches["B2"];
+                    }
+                    html += `
+                        <div class="timetable-cell ${match.type || 'lecture'}">
+                            <div class="slot-subject">${name}</div>
+                            <div class="slot-time">${match.start} - ${match.end}</div>
+                        </div>
+                    `;
+                } else {
+                    html += `<div class="timetable-cell recess"><span class="slot-detail">Free / Self Study</span></div>`;
+                }
+            });
+        });
+
+        gridContainer.innerHTML = html;
+        gridContainer.style.gridTemplateColumns = `100px repeat(${days.length}, 1fr)`;
+    }
+
+    btnCollege?.addEventListener("click", () => {
+        mode = "college";
+        btnCollege.classList.add("active");
+        btnFull?.classList.remove("active");
+        renderGrid();
+    });
+
+    btnFull?.addEventListener("click", () => {
+        mode = "full";
+        btnFull.classList.add("active");
+        btnCollege?.classList.remove("active");
+        renderGrid();
+    });
+
+    renderGrid();
+}
+
+// --- DSA Hub Component ---
+function initDSAHub() {
+    const tabsContainer = document.getElementById("dsa-topics-tabs-container");
+    const problemListContainer = document.getElementById("dsa-problem-list-element");
+    const topicTitleElement = document.getElementById("active-dsa-topic-title");
+    const topicProgressPill = document.getElementById("dsa-topic-progress-pill");
+
+    function renderTabs() {
+        if (!tabsContainer) return;
+        tabsContainer.innerHTML = DSA_TOPICS.map(topic => {
+            const completedCount = topic.problems.filter(p => appState.completedDSA[p.id]).length;
+            const isActive = topic.id === appState.activeDSATopic;
+            return `
+                <button class="dsa-tab-btn ${isActive ? 'active' : ''}" onclick="selectDSATopic('${topic.id}')">
+                    <span>${topic.title}</span>
+                    <span class="tab-badge-count">${completedCount}/${topic.problems.length}</span>
+                </button>
+            `;
+        }).join("");
+    }
+
+    function renderProblems() {
+        const topicObj = DSA_TOPICS.find(t => t.id === appState.activeDSATopic) || DSA_TOPICS[0];
+        if (topicTitleElement) topicTitleElement.textContent = topicObj.title;
+
+        const completedCount = topicObj.problems.filter(p => appState.completedDSA[p.id]).length;
+        const pct = Math.round((completedCount / topicObj.problems.length) * 100);
+        if (topicProgressPill) topicProgressPill.textContent = `${pct}% Done`;
+
+        if (!problemListContainer) return;
+        problemListContainer.innerHTML = topicObj.problems.map(prob => {
+            const isDone = appState.completedDSA[prob.id];
+            return `
+                <li class="dsa-problem-item ${isDone ? 'completed' : ''}">
+                    <div class="problem-meta">
+                        <div class="custom-checkbox" onclick="toggleDSAProblem('${prob.id}')">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><polyline points="20 6 9 17 4 12"/></svg>
+                        </div>
+                        <span class="problem-title">${prob.title}</span>
+                        <span class="difficulty-badge ${prob.difficulty}">${prob.difficulty}</span>
+                    </div>
+                    <div class="problem-actions">
+                        <a href="https://leetcode.com/problemset/all/?search=${encodeURIComponent(prob.title)}" target="_blank" class="btn-link">Practice ↗</a>
+                    </div>
+                </li>
+            `;
+        }).join("");
+    }
+
+    window.selectDSATopic = function(topicId) {
+        appState.activeDSATopic = topicId;
+        renderTabs();
+        renderProblems();
+    };
+
+    window.toggleDSAProblem = function(probId) {
+        if (appState.completedDSA[probId]) {
+            delete appState.completedDSA[probId];
+        } else {
+            appState.completedDSA[probId] = true;
+        }
+        saveStateToStorage();
+        renderTabs();
+        renderProblems();
+        renderGrowthStats();
+    };
+
+    renderTabs();
+    renderProblems();
+}
+
+// --- English Hub Component ---
+function initEnglishHub() {
+    const promptDisplay = document.getElementById("speaking-prompt-display");
+    const shadowDisplay = document.getElementById("shadow-text");
+    const btnNewTopic = document.getElementById("btn-new-topic");
+    const btnNewShadow = document.getElementById("btn-new-shadow-text");
+    const btnRecord = document.getElementById("btn-record-speech");
+    const recIndicator = document.getElementById("rec-indicator");
+    const transcriptBox = document.getElementById("speech-transcript");
+
+    let isRecording = false;
+    let recognition = null;
+
+    if (btnNewTopic) {
+        btnNewTopic.addEventListener("click", () => {
+            const randPrompt = ENGLISH_PROMPTS[Math.floor(Math.random() * ENGLISH_PROMPTS.length)];
+            if (promptDisplay) promptDisplay.textContent = `"${randPrompt}"`;
+        });
+    }
+
+    if (btnNewShadow) {
+        btnNewShadow.addEventListener("click", () => {
+            const randShadow = SHADOW_TEXTS[Math.floor(Math.random() * SHADOW_TEXTS.length)];
+            if (shadowDisplay) shadowDisplay.textContent = `"${randShadow}"`;
+        });
+    }
+
+    // Speech Recognition Setup
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event) => {
+            let currentTranscript = '';
+            for (let i = event.resultIndex; i < event.results.length; i++) {
+                currentTranscript += event.results[i][0].transcript;
+            }
+            if (transcriptBox) transcriptBox.textContent = currentTranscript;
+        };
+
+        recognition.onerror = (event) => {
+            console.error("Speech Recognition Error", event.error);
+            stopRecording();
+        };
+
+        recognition.onend = () => {
+            if (isRecording) stopRecording();
+        };
+    }
+
+    function stopRecording() {
+        isRecording = false;
+        if (recognition) recognition.stop();
+        if (recIndicator) recIndicator.style.display = "none";
+        const btnText = document.getElementById("record-btn-text");
+        if (btnText) btnText.textContent = "Start Speaking Practice";
+    }
+
+    if (btnRecord) {
+        btnRecord.addEventListener("click", () => {
+            if (!SpeechRecognition) {
+                alert("Speech recognition is not supported in this browser version. Try Google Chrome or Microsoft Edge!");
+                return;
+            }
+
+            if (!isRecording) {
+                isRecording = true;
+                if (transcriptBox) transcriptBox.textContent = "";
+                recognition.start();
+                if (recIndicator) recIndicator.style.display = "flex";
+                const btnText = document.getElementById("record-btn-text");
+                if (btnText) btnText.textContent = "Stop Practice";
+            } else {
+                stopRecording();
+            }
+        });
+    }
+}
+
+// --- Zen Space (Meditation) Component ---
+function initZenSpace() {
+    const timerDisplay = document.getElementById("meditation-timer-display");
+    const btnPlay = document.getElementById("btn-meditation-play");
+    const durationBtns = document.querySelectorAll(".time-opt");
+    const breathCircle = document.getElementById("breath-circle");
+    const breathText = document.getElementById("breath-instructions");
+    const btnAmbient = document.getElementById("btn-meditation-ambient");
+
+    let timerInterval = null;
+    let breathInterval = null;
+    let audioCtx = null;
+    let oscillator = null;
+
+    durationBtns.forEach(btn => {
+        btn.addEventListener("click", () => {
+            durationBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            appState.meditationTime = parseInt(btn.getAttribute("data-time"));
+            appState.meditationRemaining = appState.meditationTime;
+            updateMeditationDisplay();
+        });
+    });
+
+    function updateMeditationDisplay() {
+        const mins = Math.floor(appState.meditationRemaining / 60);
+        const secs = appState.meditationRemaining % 60;
+        if (timerDisplay) {
+            timerDisplay.textContent = `${mins < 10 ? '0' + mins : mins}:${secs < 10 ? '0' + secs : secs}`;
+        }
+    }
+
+    function startBreathingGuide() {
+        let state = 0; // 0: inhale, 1: hold, 2: exhale, 3: hold
+        function step() {
+            if (state === 0) {
+                breathCircle?.classList.remove("hold");
+                breathCircle?.classList.add("inhale");
+                if (breathText) breathText.textContent = "Inhale...";
+            } else if (state === 1) {
+                breathCircle?.classList.add("hold");
+                if (breathText) breathText.textContent = "Hold...";
+            } else if (state === 2) {
+                breathCircle?.classList.remove("inhale", "hold");
+                if (breathText) breathText.textContent = "Exhale...";
+            } else {
+                if (breathText) breathText.textContent = "Rest...";
+            }
+            state = (state + 1) % 4;
+        }
+        step();
+        breathInterval = setInterval(step, 4000);
+    }
+
+    function stopBreathingGuide() {
+        clearInterval(breathInterval);
+        breathCircle?.classList.remove("inhale", "hold");
+        if (breathText) breathText.textContent = "Relax";
+    }
+
+    // Ambient Synthesizer Tone (Web Audio API)
+    function toggleAmbientSound() {
+        if (!appState.ambientSoundActive) {
+            try {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                oscillator = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(136.1, audioCtx.currentTime); // Om / 136.1 Hz relaxing pitch
+
+                gain.gain.setValueAtTime(0.05, audioCtx.currentTime);
+                oscillator.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                oscillator.start();
+                appState.ambientSoundActive = true;
+                if (btnAmbient) btnAmbient.textContent = "Sound: On 🎵";
+            } catch (e) {
+                console.error("Audio error", e);
+            }
+        } else {
+            if (oscillator) oscillator.stop();
+            appState.ambientSoundActive = false;
+            if (btnAmbient) btnAmbient.textContent = "Sound: Off";
+        }
+    }
+
+    if (btnAmbient) {
+        btnAmbient.addEventListener("click", toggleAmbientSound);
+    }
+
+    if (btnPlay) {
+        btnPlay.addEventListener("click", () => {
+            if (!appState.isMeditationRunning) {
+                appState.isMeditationRunning = true;
+                btnPlay.textContent = "Pause Session";
+                btnPlay.classList.replace("btn-primary", "btn-secondary");
+                startBreathingGuide();
+
+                timerInterval = setInterval(() => {
+                    appState.meditationRemaining--;
+                    updateMeditationDisplay();
+
+                    if (appState.meditationRemaining <= 0) {
+                        clearInterval(timerInterval);
+                        stopBreathingGuide();
+                        appState.isMeditationRunning = false;
+                        btnPlay.textContent = "Start Session";
+                        btnPlay.classList.replace("btn-secondary", "btn-primary");
+                        alert("🧘 Meditation session complete. Great job grounding yourself!");
+                    }
+                }, 1000);
+            } else {
+                clearInterval(timerInterval);
+                stopBreathingGuide();
+                appState.isMeditationRunning = false;
+                btnPlay.textContent = "Resume Session";
+                btnPlay.classList.replace("btn-secondary", "btn-primary");
+            }
+        });
+    }
+
+    updateMeditationDisplay();
+}
+
+// --- Settings Component ---
+function initSettings() {
+    const batchBtns = document.querySelectorAll(".batch-btn");
+    const activeBatchTexts = document.querySelectorAll(".active-batch-text");
+    const userSubText = document.querySelector(".user-sub");
+    const avatar = document.querySelector(".avatar");
+    const subjectsContainer = document.getElementById("subjects-selector-container");
+    const btnSaveSubjects = document.getElementById("btn-save-subjects");
+    const btnResetData = document.getElementById("btn-reset-data");
+
+    // Set initial batch UI
+    batchBtns.forEach(btn => {
+        if (btn.getAttribute("data-batch") === appState.batch) {
+            btn.classList.add("active");
+        } else {
+            btn.classList.remove("active");
+        }
+
+        btn.addEventListener("click", () => {
+            batchBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            appState.batch = btn.getAttribute("data-batch");
+            
+            // Update UI elements displaying batch
+            activeBatchTexts.forEach(el => el.textContent = appState.batch);
+            if (userSubText) userSubText.textContent = `Batch ${appState.batch}`;
+            if (avatar) avatar.textContent = appState.batch;
+
+            saveStateToStorage();
+            initTimetable();
+            updateLiveClockAndTask();
+        });
+    });
+
+    // Subject Editors
+    function renderSubjectInputs() {
+        if (!subjectsContainer) return;
+        subjectsContainer.innerHTML = appState.focusSubjects.map((subName, index) => `
+            <div class="subject-edit-item">
+                <div class="subject-header-row">
+                    <label>Core Subject ${index + 1}</label>
+                </div>
+                <input type="text" class="subject-input" data-index="${index}" value="${subName}">
+            </div>
+        `).join("");
+    }
+
+    if (btnSaveSubjects) {
+        btnSaveSubjects.addEventListener("click", () => {
+            const inputs = document.querySelectorAll(".subject-input");
+            inputs.forEach(inp => {
+                const idx = parseInt(inp.getAttribute("data-index"));
+                appState.focusSubjects[idx] = inp.value.trim() || `Subject ${idx + 1}`;
+            });
+            saveStateToStorage();
+            renderHabitChecklist();
+            alert("Custom subjects updated successfully!");
+        });
+    }
+
+    if (btnResetData) {
+        btnResetData.addEventListener("click", () => {
+            if (confirm("Are you sure you want to reset all habit progress, DSA checkboxes, and app settings?")) {
+                localStorage.removeItem("aura_routine_state");
+                location.reload();
+            }
+        });
+    }
+
+    // Backup & Restore Handlers
+    const btnExport = document.getElementById("btn-export-backup");
+    const btnImport = document.getElementById("btn-import-backup");
+    const fileInput = document.getElementById("file-import-input");
+
+    if (btnExport) {
+        btnExport.addEventListener("click", () => {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(appState, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `aura_routine_backup_${new Date().toISOString().slice(0,10)}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        });
+    }
+
+    if (btnImport && fileInput) {
+        btnImport.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const imported = JSON.parse(event.target.result);
+                    appState = { ...appState, ...imported };
+                    saveStateToStorage();
+                    location.reload();
+                } catch (err) {
+                    alert("Invalid JSON backup file.");
+                }
+            };
+            reader.readAsText(file);
+        });
+    }
+
+    renderSubjectInputs();
+}
+
+</script>
+</body>
+</html>
